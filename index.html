@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+    <html lang="it">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TextToSpeech API</title>
+        <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+        <script src="https://sdk.amazonaws.com/js/aws-sdk-2.740.0.min.js"></script>
+
+        <script>
+            AWS.config.credentials = new AWS.Credentials(aws_access_key_id, aws_secret_access_key); // credenziali servizi aws
+            AWS.config.region = "us-west-2";
+
+            function inverseLang() { // funzione per invertire la lingua
+                temp = inputText.linguaFrom.value;
+                inputText.linguaFrom.value = inputText.linguaTo.value;
+                inputText.linguaTo.value = temp;
+
+                // valori text input azzerati
+                inputText.testo.value = "";
+                inputText.testoTradotto.value = "";
+            }
+
+            function textToSpeech(id) {
+                var polly = new AWS.Polly(); // sintetizzatore vocale
+                var voiceId;
+
+                // il parametro passato alla funzione indica per quale input text è stato richiesta la sintesi vocale
+                if (id == "in") {
+                    text = inputText.testo.value; // testo da tradurre
+                    lang = inputText.linguaFrom.value; // lingua di partenza
+                } else {
+                    text = inputText.testoTradotto.value; // testo tradotto
+                    lang = inputText.linguaTo.value; // lingua in cui tradurre
+                }
+
+                if (!text) { // nel caso in cui mancasse il testo da sintetizzare vocalmente
+                    alert("Missing text! Impossible to launch Amazon Polly!");
+                    return;
+                }
+
+                switch (lang) { // in base al linguaggio, viene selezionato un profilo vocale differente
+                    case "de":
+                        voiceId = "Marlene";
+                        break;
+                    case "en":
+                        voiceId = "Joanna";
+                        break;
+                    case "es":
+                        voiceId = "Penelope";
+                        break;
+                    case "fr":
+                        voiceId = "Celine";
+                        break;
+                    case "it":
+                        voiceId = "Giorgio";
+                        break;
+                    default:
+                        voiceId = null;
+                        break;
+                }
+
+                /* if (!voiceId) { // non attualmente implementata, le lingue da me utilizzate sono poche, a scopo solo dimostrativo
+                    alert("Speech synthesis unsupported for language code: \"" + lang + "\"");
+                    return;
+                } */
+
+                var params = {
+                    OutputFormat: "mp3", // formato audio
+                    SampleRate: "8000",
+                    Text: text, // testo da sintetizzare
+                    TextType: "text",
+                    VoiceId: voiceId
+                };
+
+                polly.synthesizeSpeech(params, function(err, data) {
+                    if (err) { // in caso di errore
+                        console.log(err, err.stack);
+                        alert("Error calling Amazon Polly. " + err.message);
+                    }
+                    else {
+                        var uInt8Array = new Uint8Array(data.AudioStream);
+                        var arrayBuffer = uInt8Array.buffer;
+                        var blob = new Blob([arrayBuffer]);
+                        var url = URL.createObjectURL(blob);
+
+                        audioElement = new Audio([url]);
+                        audioElement.play();
+                    }
+                });
+            }
+
+            function Traduci() { // funzione di traduzione del testo
+                if (!inputText.testo.value) { // se non è stato digitato del tasto da tradurre
+                    alert("Input text missing!");
+                    return;
+                }
+
+                var translate = new AWS.Translate({region: AWS.config.region}); // traduttore
+                var params = { // parametri per la funzione di traduzione
+                    Text: inputText.testo.value, // testo da tradurre
+                    SourceLanguageCode: inputText.linguaFrom.value, // lingua del testo da tradurre
+                    TargetLanguageCode: inputText.linguaTo.value // lingua in cui tradurre
+                };
+
+                translate.translateText(params, function(err, data) {
+                    if (err) { // in caso di errore
+                        console.log(err, err.stack);
+                        alert("Error calling Amazon Translate. " + err.message);
+                        return;
+                    }
+                    if (data) {
+                        inputText.testoTradotto.value = data.TranslatedText; // il testo tradotto viene scritto all'interno della textarea di output
+                    }
+                });
+            }
+
+            function reloadTraduci() { // al cambio della lingua in cui si deve tradurre, viene effettuata una traduzione, senza dover premere il pulsante di Traduci
+                if (inputText.testo.value != "") {
+                    Traduci();
+                }
+            }
+        </script>
+
+    </head>
+    <body class="bg-light"> 
+        <h1 style="text-align: center;">TextToSpeech Amazon API</h1>
+        <br>
+        <div class="container col-sm-6 offset-sm-3">
+            <form name="inputText">
+                <div class="row">
+                    <div class="col-sm-4">
+                        <div class="form-group" style="float: right;">
+                            <select id="start" name="linguaFrom">
+                                <option value="it">Italiano</option>
+                                <option value="en">Inglese</option>
+                                <option value="de">Tedesco</option>
+                                <option value="es">Spagnolo</option>
+                                <option value="fr">Francese</option>
+                                
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-sm-4" style="text-align: center;">
+                        <img src="ok.png" alt="" style="width: 30px; height: 30px;" onclick="inverseLang()">
+                    </div>
+                    <div class="col-sm-4">
+                        <div class="form-group" style="float: left;">
+                            <select id="end" name="linguaTo" onchange="reloadTraduci()">
+                                <option value="en">Inglese</option>
+                                <option value="de">Tedesco</option>
+                                <option value="es">Spagnolo</option>
+                                <option value="fr">Francese</option>
+                                <option value="it">Italiano</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-6">
+                        <div class="form-group">
+                            <textarea class="form-control" rows="3" name="testo" placeholder="Inserisci il testo"></textarea>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="form-group">
+                            <textarea class="form-control" rows="3" name="testoTradotto" placeholder="Traduzione" readonly></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-6">
+                        <button type="button" class="btn btn-light" style="float: right; width: auto; height: 25px; background-repeat: no-repeat; background-image: url('volume.svg');" onclick="textToSpeech('in')"></button>
+                    </div>
+                    <div class="col-sm-6">
+                        <button type="button" class="btn btn-light" style="float: right; width: auto; height: 25px; background-repeat: no-repeat; background-image: url('volume.svg');" onclick="textToSpeech('out')"></button>
+                    </div>
+                </div>
+                <br>
+                <button style="float: right" type="button" class="btn btn-primary" onclick="Traduci()">Traduci</button>
+            </form>
+        </div>
+    </body>
+    
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+</html>
